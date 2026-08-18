@@ -139,11 +139,24 @@ void UpdateGitProcess::process()
 
                 int nNumberOfAsserts = release.listRecords.count();
 
+                // DISCOVERY order, and the set is only the dupe guard. This list is written to the
+                // server list JSON as the "Src" records, and both installers walk it in order to
+                // pick the mirror they download from. A QSet iterates in an order derived from
+                // Qt's per-PROCESS random hash seed, so handing its contents over directly made
+                // the generated file differ between two runs over the very same releases - and
+                // moved which mirror gets tried first. Assets keep coming before the links parsed
+                // out of the release body, which is the order that was intended here.
                 QSet<QString> stDownloads;
+                QList<QString> listDownloads;
 
                 for (int j = 0; j < nNumberOfAsserts; j++) {
                     if (Utils::checkPattern(release.listRecords.at(j).sSrc, &mdata)) {
-                        stDownloads.insert(release.listRecords.at(j).sSrc);
+                        QString sSrc = release.listRecords.at(j).sSrc;
+
+                        if (!stDownloads.contains(sSrc)) {
+                            stDownloads.insert(sSrc);
+                            listDownloads.append(sSrc);
+                        }
                     }
                 }
 
@@ -153,11 +166,16 @@ void UpdateGitProcess::process()
 
                 for (int j = 0; j < nNumberOfLinks; j++) {
                     if (Utils::checkPattern(listStrings.at(j), &mdata)) {
-                        stDownloads.insert(listStrings.at(j));
+                        QString sLink = listStrings.at(j);
+
+                        if (!stDownloads.contains(sLink)) {
+                            stDownloads.insert(sLink);
+                            listDownloads.append(sLink);
+                        }
                     }
                 }
 
-                mdata.listDownloads = stDownloads.toList();
+                mdata.listDownloads = listDownloads;
 
                 Utils::updateJsonFile(sServerLastestListFileName, QList<Utils::MDATA>() << mdata);
             }
